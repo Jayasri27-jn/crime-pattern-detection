@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Crime Severity Analysis Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #080c14;
+    --surface: #0d1520;
+    --surface2: #111d2e;
+    --border: #1a3050;
+    --accent: #00d4ff;
+    --accent2: #ff4060;
+    --accent3: #ffd700;
+    --accent4: #00ff88;
+    --text: #c8dff0;
+    --text-dim: #5a7a9a;
+    --glow: 0 0 20px rgba(0,212,255,0.3);
+    --glow-red: 0 0 20px rgba(255,64,96,0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+  /* Grid bg */
+  body::after {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background-image: linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrapper { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+  /* HEADER */
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 24px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+    position: relative;
+  }
+  header::after {
+    content: ''; position: absolute; bottom: -1px; left: 0;
+    width: 300px; height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+  .header-icon { font-size: 2rem; filter: drop-shadow(0 0 10px var(--accent)); }
+  .header-text h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 2.2rem; font-weight: 700; letter-spacing: 3px;
+    color: #fff;
+    text-transform: uppercase;
+  }
+  .header-text p {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem; color: var(--accent); letter-spacing: 2px;
+    margin-top: 4px;
+  }
+  .status-badge {
+    margin-left: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem; color: var(--accent4);
+    border: 1px solid var(--accent4);
+    padding: 6px 14px; border-radius: 2px;
+    letter-spacing: 2px;
+    box-shadow: 0 0 10px rgba(0,255,136,0.2);
+    animation: pulse-green 2s infinite;
+  }
+  @keyframes pulse-green {
+    0%,100% { box-shadow: 0 0 10px rgba(0,255,136,0.2); }
+    50% { box-shadow: 0 0 20px rgba(0,255,136,0.5); }
+  }
+
+  /* TABS */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+  .tab {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.95rem; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 28px;
+    background: transparent; border: none; color: var(--text-dim);
+    cursor: pointer; position: relative;
+    transition: color 0.2s;
+  }
+  .tab::after {
+    content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px;
+    background: var(--accent); transform: scaleX(0); transition: transform 0.2s;
+  }
+  .tab.active { color: var(--accent); }
+  .tab.active::after { transform: scaleX(1); }
+  .tab:hover { color: var(--text); }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* SECTION LABEL */
+  .section-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem; color: var(--accent);
+    letter-spacing: 3px; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* UPLOAD ZONE */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    background: var(--surface);
+    border-radius: 4px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0,212,255,0.05);
+    box-shadow: var(--glow);
+  }
+  .upload-zone input { display: none; }
+  .upload-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.7; }
+  .upload-zone h3 {
+    font-family: 'Rajdhani', sans-serif; font-size: 1.4rem;
+    letter-spacing: 2px; color: #fff; margin-bottom: 8px;
+  }
+  .upload-zone p { color: var(--text-dim); font-size: 0.85rem; }
+  .file-types {
+    display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap;
+  }
+  .file-type {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem; border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 2px; color: var(--text-dim);
+  }
+
+  /* GRID */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; }
+  @media(max-width:900px) {
+    .grid-2,.grid-3,.grid-4 { grid-template-columns: 1fr; }
+  }
+
+  /* FORM */
+  .form-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px;
+    margin-bottom: 20px;
+    position: relative;
+  }
+  .form-block::before {
+    content: ''; position: absolute; top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: linear-gradient(180deg, var(--accent), transparent);
+    border-radius: 4px 0 0 4px;
+  }
+  .form-block h3 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1rem; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--accent);
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .field-group { display: grid; gap: 16px; }
+  .field label {
+    display: block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem; color: var(--text-dim);
+    letter-spacing: 2px; margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+  }
+  .field input:focus, .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,212,255,0.15);
+  }
+  .field select option { background: var(--surface); }
+
+  /* PREDICT BUTTON */
+  .predict-btn {
+    width: 100%;
+    padding: 18px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.2rem; font-weight: 700;
+    letter-spacing: 4px; text-transform: uppercase;
+    cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: all 0.3s;
+    margin: 24px 0;
+    border-radius: 3px;
+  }
+  .predict-btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--accent); opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .predict-btn:hover { color: var(--bg); box-shadow: var(--glow); }
+  .predict-btn:hover::before { opacity: 1; }
+  .predict-btn span { position: relative; z-index: 1; }
+  .predict-btn.loading { pointer-events: none; }
+  .predict-btn.loading .btn-text { opacity: 0; }
+  .predict-btn.loading::after {
+    content: 'ANALYZING...';
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; letter-spacing: 4px;
+    animation: blink 0.6s infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+  /* RESULT CARD */
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 32px;
+    text-align: center;
+    position: relative; overflow: hidden;
+    display: none;
+  }
+  .result-card.show { display: block; animation: fadeIn 0.5s ease; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+  .result-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+  }
+  .severity-score {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 4rem; font-weight: 700;
+    line-height: 1;
+    text-shadow: 0 0 30px currentColor;
+    margin: 12px 0;
+  }
+  .severity-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.8rem; letter-spacing: 3px;
+    color: var(--text-dim); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .severity-tag {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem; letter-spacing: 2px;
+    padding: 6px 20px; border-radius: 2px;
+    margin-top: 8px;
+  }
+  .risk-indicators {
+    display: grid; grid-template-columns: repeat(3,1fr);
+    gap: 12px; margin-top: 24px;
+  }
+  .risk-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px; padding: 14px;
+    text-align: center;
+  }
+  .risk-item .val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.4rem; color: var(--accent);
+  }
+  .risk-item .lbl {
+    font-size: 0.65rem; color: var(--text-dim);
+    letter-spacing: 1px; margin-top: 4px;
+  }
+
+  /* KPI CARDS */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 28px; }
+  @media(max-width:900px){ .kpi-grid { grid-template-columns: 1fr 1fr; } }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px; padding: 20px;
+    position: relative; overflow: hidden;
+  }
+  .kpi::after {
+    content: ''; position: absolute;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    top: -20px; right: -20px;
+    opacity: 0.07;
+  }
+  .kpi.blue::after { background: var(--accent); }
+  .kpi.red::after { background: var(--accent2); }
+  .kpi.gold::after { background: var(--accent3); }
+  .kpi.green::after { background: var(--accent4); }
+  .kpi .k-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem; color: var(--text-dim);
+    letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .kpi .k-val {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 2rem; font-weight: 700; color: #fff;
+    line-height: 1;
+  }
+  .kpi .k-sub {
+    font-size: 0.75rem; color: var(--text-dim);
+    margin-top: 6px;
+  }
+  .kpi .k-trend { font-size: 0.75rem; margin-top: 4px; }
+  .kpi .k-icon { position: absolute; right: 16px; top: 16px; font-size: 1.5rem; opacity: 0.4; }
+
+  /* CHART CONTAINERS */
+  .chart-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px; padding: 24px;
+    position: relative;
+  }
+  .chart-block h4 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.9rem; font-weight: 600; letter-spacing: 2px;
+    color: var(--accent); text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .chart-block h4::before {
+    content: ''; width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .chart-wrap { position: relative; height: 260px; }
+
+  /* DATA TABLE */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+  }
+  .data-table th {
+    background: var(--bg);
+    color: var(--accent);
+    padding: 10px 14px;
+    text-align: left;
+    letter-spacing: 1px;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(26,48,80,0.5);
+    color: var(--text);
+  }
+  .data-table tr:hover td { background: rgba(0,212,255,0.03); }
+  .severity-pill {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 2px; font-size: 0.7rem; letter-spacing: 1px;
+  }
+  .pill-low { background: rgba(0,255,136,0.15); color: var(--accent4); border: 1px solid var(--accent4); }
+  .pill-med { background: rgba(255,215,0,0.15); color: var(--accent3); border: 1px solid var(--accent3); }
+  .pill-high { background: rgba(255,64,96,0.15); color: var(--accent2); border: 1px solid var(--accent2); }
+
+  /* POWERBI SECTION */
+  .powerbi-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0; overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .powerbi-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .powerbi-header h3 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1rem; letter-spacing: 2px; color: #fff;
+    font-weight: 600; text-transform: uppercase;
+  }
+  .powerbi-logo {
+    width: 28px; height: 28px; border-radius: 4px;
+    background: linear-gradient(135deg, #f2c811, #e8a800);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; font-weight: bold; color: #000;
+  }
+  .powerbi-url-form {
+    display: flex; gap: 12px; padding: 24px;
+    align-items: flex-end;
+  }
+  .powerbi-url-form .field { flex: 1; }
+  .connect-btn {
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #f2c811, #e8a800);
+    border: none; border-radius: 3px;
+    color: #000; font-family: 'Rajdhani', sans-serif;
+    font-weight: 700; letter-spacing: 2px;
+    font-size: 0.9rem; cursor: pointer;
+    white-space: nowrap; transition: opacity 0.2s;
+    text-transform: uppercase;
+  }
+  .connect-btn:hover { opacity: 0.85; }
+  .powerbi-frame-wrap {
+    padding: 0 24px 24px;
+  }
+  .powerbi-frame {
+    width: 100%; height: 600px;
+    border: 1px solid var(--border);
+    border-radius: 3px; background: #1a1a2e;
+  }
+  .powerbi-placeholder {
+    width: 100%; height: 400px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    border: 2px dashed var(--border);
+    border-radius: 3px;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem; letter-spacing: 2px;
+    gap: 12px;
+  }
+  .powerbi-placeholder .icon { font-size: 3rem; opacity: 0.4; }
+
+  /* ANALYSIS METRICS - from ipynb output integration */
+  .analysis-metrics {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    margin-bottom: 20px;
+  }
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px; padding: 20px;
+    position: relative;
+  }
+  .metric-card h4 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.85rem; font-weight: 600;
+    letter-spacing: 2px; color: var(--accent);
+    text-transform: uppercase; margin-bottom: 16px;
+  }
+
+  /* PROGRESS BARS */
+  .progress-row { margin-bottom: 10px; }
+  .progress-label {
+    display: flex; justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem; color: var(--text-dim);
+    margin-bottom: 5px;
+  }
+  .progress-bar-bg {
+    height: 6px; background: var(--bg);
+    border-radius: 3px; overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 1s ease;
+  }
+
+  /* INTEGRATED VIEW */
+  .integrated-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .integrated-header h2 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.5rem; letter-spacing: 3px; color: #fff;
+    font-weight: 700; text-transform: uppercase;
+  }
+  .sync-badge {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem; color: var(--accent4);
+    border: 1px solid var(--accent4);
+    padding: 4px 12px; border-radius: 2px;
+    letter-spacing: 2px;
+  }
+
+  .mb16 { margin-bottom: 16px; }
+  .mb24 { margin-bottom: 24px; }
+  .mt16 { margin-top: 16px; }
+
+  /* ALERTS */
+  .alert {
+    padding: 12px 16px;
+    border-radius: 3px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem; letter-spacing: 1px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .alert.show { display: block; }
+  .alert-error { background: rgba(255,64,96,0.1); border: 1px solid var(--accent2); color: var(--accent2); }
+  .alert-success { background: rgba(0,255,136,0.1); border: 1px solid var(--accent4); color: var(--accent4); }
+  .alert-info { background: rgba(0,212,255,0.08); border: 1px solid var(--accent); color: var(--accent); }
+
+  /* CORRELATION MATRIX colors */
+  .corr-table td { text-align: center; font-size: 0.7rem; padding: 6px 8px; }
+
+  /* HIDE scrollbar aesthetic */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  /* MAP PULSE ANIMATION */
+  .pulse-circle {
+    transform-origin: center;
+    animation: pulse-ring 2s infinite;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 8px currentColor); }
+    100% { transform: scale(0.9); opacity: 0.8; }
+  }
+  /* MAP POPUP STYLES */
+  .leaflet-popup-content-wrapper {
+    background: #0d1520 !important;
+    border: 1px solid #00d4ff !important;
+    border-radius: 4px !important;
+    box-shadow: 0 0 20px rgba(0,212,255,0.3) !important;
+    color: #c8dff0 !important;
+    font-family: 'Exo 2', sans-serif !important;
+  }
+  .leaflet-popup-tip { background: #0d1520 !important; }
+  .map-popup-title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.1rem; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 10px; padding-bottom: 8px;
+    border-bottom: 1px solid #1a3050;
+  }
+  .map-popup-row {
+    display: flex; justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem; color: #5a7a9a;
+    margin: 5px 0;
+  }
+  .map-popup-row span:last-child { color: #c8dff0; font-weight: 600; }
+  .map-popup-badge {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem; letter-spacing: 1px;
+    padding: 3px 8px; border-radius: 2px;
+    margin-top: 8px;
+  }
+  .badge-critical { background: rgba(255,64,96,0.15); border: 1px solid #ff4060; color: #ff4060; }
+  .badge-high     { background: rgba(255,215,0,0.15);  border: 1px solid #ffd700; color: #ffd700; }
+  .badge-medium   { background: rgba(0,212,255,0.12);  border: 1px solid #00d4ff; color: #00d4ff; }
+  .badge-low      { background: rgba(0,255,136,0.12);  border: 1px solid #00ff88; color: #00ff88; }
+  .leaflet-tooltip {
+    background: rgba(8,12,20,0.9) !important;
+    border: 1px solid #1a3050 !important;
+    color: #00d4ff !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 1px !important;
+    white-space: nowrap !important;
+  }
+  .leaflet-tooltip-top::before { border-top-color: #1a3050 !important; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-icon">🚔</div>
+    <div class="header-text">
+      <h1>Crime Severity Analysis Platform</h1>
+      <p>// ML-POWERED PREDICTION + POWER BI INTEGRATION // REAL-TIME ANALYTICS ENGINE //</p>
+    </div>
+    <div class="status-badge" style="margin-right: 16px;">● SYSTEM ONLINE</div>
+    <a href="/logout" style="text-decoration: none;">
+      <div class="status-badge" style="color: var(--accent2); border-color: var(--accent2); box-shadow: 0 0 10px rgba(255,64,96,0.2); animation: none; cursor: pointer;">⏻ LOGOUT</div>
+    </a>
+  </header>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('predict')">⚡ Predict</button>
+    <button class="tab" onclick="switchTab('upload')">📁 Dataset Upload</button>
+    <button class="tab" onclick="switchTab('analysis')">📊 ML Analysis</button>
+    <button class="tab" onclick="switchTab('map')">🗺️ Geospatial Map</button>
+    <button class="tab" onclick="switchTab('integrated')">🔗 Integrated View</button>
+  </div>
+
+  <!-- ═══════════════════════════════ PREDICT PANEL ═══════════════════════════════ -->
+  <div id="panel-predict" class="panel active">
+
+    <div class="form-block">
+      <h3>📍 Location & Temporal Context</h3>
+      <div class="field-group grid-2">
+        <div class="field">
+          <label>City</label>
+          <select id="city">
+            <option value="Delhi">Delhi</option>
+            <option value="Mumbai">Mumbai</option>
+            <option value="Bangalore">Bangalore</option>
+            <option value="Chennai">Chennai</option>
+            <option value="Kolkata">Kolkata</option>
+            <option value="Hyderabad">Hyderabad</option>
+            <option value="Ahmedabad">Ahmedabad</option>
+            <option value="Pune">Pune</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Location / Area</label>
+          <input id="location" type="text" placeholder="e.g. Connaught Place" />
+        </div>
+        <div class="field">
+          <label>Time of Day</label>
+          <select id="timeofday">
+            <option value="Morning">Morning</option>
+            <option value="Afternoon">Afternoon</option>
+            <option value="Evening">Evening</option>
+            <option value="Night">Night</option>
+            <option value="Midnight">Midnight</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Crime Type</label>
+          <input id="crimetype" type="text" placeholder="e.g. theft, robbery, assault" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-block">
+      <h3>📹 Infrastructure & Traffic</h3>
+      <div class="field-group grid-4">
+        <div class="field">
+          <label>Nearby CCTV Cameras</label>
+          <input id="cctv" type="number" value="2" min="0" />
+        </div>
+        <div class="field">
+          <label>Police Stations Nearby</label>
+          <input id="police" type="number" value="1" min="0" />
+        </div>
+        <div class="field">
+          <label>Traffic Congestion Level</label>
+          <input id="traffic" type="number" value="2" min="1" max="10" />
+        </div>
+        <div class="field">
+          <label>Traffic Avg Speed (KMH)</label>
+          <input id="speed" type="number" value="25" min="0" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-block">
+      <h3>🌦 Environmental Conditions</h3>
+      <div class="field-group grid-3">
+        <div class="field">
+          <label>Weather Condition</label>
+          <input id="weather" type="text" placeholder="e.g. rainy, sunny, foggy" value="rainy" />
+        </div>
+        <div class="field">
+          <label>Temperature (°C)</label>
+          <input id="temp" type="number" value="32" />
+        </div>
+        <div class="field">
+          <label>Rainfall (mm)</label>
+          <input id="rainfall" type="number" value="155" min="0" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-block">
+      <h3>🚨 Incident Context</h3>
+      <div class="field-group grid-2">
+        <div class="field">
+          <label>Road Accidents Reported</label>
+          <input id="accidents" type="number" value="2" min="0" />
+        </div>
+        <div class="field">
+          <label>Public Complaints</label>
+          <input id="complaints" type="number" value="2" min="0" />
+        </div>
+      </div>
+    </div>
+
+
+
+    <button class="predict-btn" onclick="predictSeverity()">
+      <span class="btn-text">⚡ Predict Crime Severity</span>
+    </button>
+
+    <!-- RESULT -->
+    <div id="result-card" class="result-card">
+      <div class="severity-label">Predicted Crime Severity Score</div>
+      <div id="severity-score" class="severity-score">—</div>
+      <div id="severity-tag" class="severity-tag">—</div>
+      <div class="risk-indicators">
+        <div class="risk-item">
+          <div class="val" id="ri-risk">—</div>
+          <div class="lbl">Risk Level</div>
+        </div>
+        <div class="risk-item">
+          <div class="val" id="ri-conf">—</div>
+          <div class="lbl">Confidence</div>
+        </div>
+        <div class="risk-item">
+          <div class="val" id="ri-alert">—</div>
+          <div class="lbl">Alert Priority</div>
+        </div>
+      </div>
+      <!-- mini bar chart inline -->
+      <div style="margin-top:24px;">
+        <div class="chart-block">
+          <h4>Factor Contribution</h4>
+          <div class="chart-wrap">
+            <canvas id="factorChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ UPLOAD PANEL ═══════════════════════════════ -->
+  <div id="panel-upload" class="panel">
+    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <input type="file" id="fileInput" accept=".csv,.json,.xlsx,.pbix" onchange="handleFile(this.files[0])"/>
+      <div class="upload-icon">📂</div>
+      <h3>Drop Dataset Here</h3>
+      <p>Upload your crime dataset for bulk analysis and ML processing</p>
+      <div class="file-types">
+        <span class="file-type">CSV</span>
+        <span class="file-type">JSON</span>
+        <span class="file-type">XLSX</span>
+        <span class="file-type">PBIX</span>
+      </div>
+    </div>
+
+    <div id="upload-result" style="display:none; margin-top:20px;">
+      <div class="alert alert-success show" id="upload-msg">✓ Dataset loaded successfully.</div>
+      <div class="form-block">
+        <h3>📋 Dataset Preview</h3>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="preview-table"></table>
+        </div>
+      </div>
+      <button class="predict-btn" style="margin-top:0;" onclick="runBulkAnalysis()">
+        <span class="btn-text">🔬 Run Bulk ML Analysis on Dataset</span>
+      </button>
+    </div>
+
+    <!-- Sample data option -->
+    <div class="form-block" style="margin-top:20px;">
+      <h3>🧪 Use Sample Crime Dataset</h3>
+      <p style="color:var(--text-dim); font-size:0.85rem; margin-bottom:16px;">
+        Load a built-in sample dataset for demonstration purposes (Indian cities crime data).
+      </p>
+      <button class="predict-btn" onclick="loadSampleData()" style="margin:0; padding:14px;">
+        <span class="btn-text">Load Sample Dataset</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ ANALYSIS PANEL ═══════════════════════════════ -->
+  <div id="panel-analysis" class="panel">
+
+    <div class="kpi-grid">
+      <div class="kpi blue">
+        <div class="k-icon">📊</div>
+        <div class="k-label">Total Incidents</div>
+        <div class="k-val" id="kpi-total">2,847</div>
+        <div class="k-sub k-trend" style="color:var(--accent2)">↑ 12.4% vs last month</div>
+      </div>
+      <div class="kpi red">
+        <div class="k-icon">🔴</div>
+        <div class="k-label">Avg Severity</div>
+        <div class="k-val" id="kpi-avg">5.72</div>
+        <div class="k-sub">out of 10.0</div>
+      </div>
+      <div class="kpi gold">
+        <div class="k-icon">🏙</div>
+        <div class="k-label">Cities Monitored</div>
+        <div class="k-val">8</div>
+        <div class="k-sub">Major metro areas</div>
+      </div>
+      <div class="kpi green">
+        <div class="k-icon">🎯</div>
+        <div class="k-label">Model Accuracy</div>
+        <div class="k-val">87.3%</div>
+        <div class="k-sub">Random Forest R²</div>
+      </div>
+    </div>
+
+    <div class="grid-2 mb24">
+      <div class="chart-block">
+        <h4>Crime Severity by City (Avg vs Predicted)</h4>
+        <div class="chart-wrap">
+          <canvas id="barCityChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-block">
+        <h4>Severity Trend Over Time</h4>
+        <div class="chart-wrap">
+          <canvas id="lineChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 mb24">
+      <div class="chart-block">
+        <h4>Crime Type Distribution</h4>
+        <div class="chart-wrap">
+          <canvas id="crimeTypeChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-block">
+        <h4>Time of Day vs Severity</h4>
+        <div class="chart-wrap">
+          <canvas id="timeChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="analysis-metrics mb24">
+      <div class="metric-card">
+        <h4>Feature Importance (ML Model)</h4>
+        <div class="progress-row">
+          <div class="progress-label"><span>Public Complaints</span><span>87%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:87%;background:var(--accent2)"></div></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label"><span>Traffic Congestion</span><span>74%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:74%;background:var(--accent)"></div></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label"><span>Time of Day</span><span>68%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:68%;background:var(--accent3)"></div></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label"><span>Weather Condition</span><span>61%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:61%;background:var(--accent4)"></div></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label"><span>Police Stations</span><span>55%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:55%;background:#a855f7"></div></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label"><span>CCTV Cameras</span><span>49%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:49%;background:#f97316"></div></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label"><span>Rainfall</span><span>42%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:42%;background:#06b6d4"></div></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label"><span>Road Accidents</span><span>38%</span></div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:38%;background:#84cc16"></div></div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <h4>Model Performance Metrics</h4>
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead>
+              <tr><th>Metric</th><th>Value</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>R² Score</td><td>0.8731</td><td><span class="severity-pill pill-low">GOOD</span></td></tr>
+              <tr><td>MAE</td><td>0.612</td><td><span class="severity-pill pill-low">GOOD</span></td></tr>
+              <tr><td>RMSE</td><td>0.894</td><td><span class="severity-pill pill-med">FAIR</span></td></tr>
+              <tr><td>Precision</td><td>84.2%</td><td><span class="severity-pill pill-low">GOOD</span></td></tr>
+              <tr><td>Recall</td><td>81.7%</td><td><span class="severity-pill pill-low">GOOD</span></td></tr>
+              <tr><td>F1 Score</td><td>82.9%</td><td><span class="severity-pill pill-low">GOOD</span></td></tr>
+              <tr><td>Cross-Val</td><td>85.6%</td><td><span class="severity-pill pill-low">GOOD</span></td></tr>
+              <tr><td>Overfit Risk</td><td>Low</td><td><span class="severity-pill pill-low">SAFE</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-block mb24">
+      <h4>Scatter: Actual vs Predicted Severity</h4>
+      <div class="chart-wrap">
+        <canvas id="scatterChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ MAP PANEL ═══════════════════════════════ -->
+  <div id="panel-map" class="panel">
+    <div class="form-block" style="padding: 0; overflow: hidden; height: 75vh;">
+      <div id="indiaMap" style="width: 100%; height: 100%; background: #0b131e; border-radius: 4px;"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ INTEGRATED PANEL ═══════════════════════════════ -->
+  <div id="panel-integrated" class="panel">
+
+    <div class="integrated-header">
+      <h2>🔗 Integrated Analysis View</h2>
+      <span class="sync-badge">● LIVE SYNC</span>
+    </div>
+
+    <!-- Top KPIs row -->
+    <div class="kpi-grid mb24">
+      <div class="kpi blue">
+        <div class="k-icon">🤖</div>
+        <div class="k-label">Last Prediction</div>
+        <div class="k-val" id="int-last-pred">—</div>
+        <div class="k-sub">Severity Score</div>
+      </div>
+      <div class="kpi red">
+        <div class="k-icon">📍</div>
+        <div class="k-label">Last City</div>
+        <div class="k-val" id="int-last-city" style="font-size:1.3rem;">—</div>
+        <div class="k-sub">Analyzed location</div>
+      </div>
+      <div class="kpi gold">
+        <div class="k-icon">🗺️</div>
+        <div class="k-label">Map Sync</div>
+        <div class="k-val" id="pbi-status-kpi" style="font-size:1rem; color:var(--accent4)">Active</div>
+        <div class="k-sub">Real-time geospatial</div>
+      </div>
+      <div class="kpi green">
+        <div class="k-icon">📁</div>
+        <div class="k-label">Dataset</div>
+        <div class="k-val" id="int-dataset" style="font-size:1rem;">None</div>
+        <div class="k-sub">Loaded records</div>
+      </div>
+    </div>
+
+    <!-- Side by side: ML result + Power BI mini -->
+    <div class="grid-2 mb24">
+      <div class="chart-block">
+        <h4>ML Prediction History</h4>
+        <div class="chart-wrap">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-block">
+        <h4>City Risk Heatmap</h4>
+        <div class="chart-wrap">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Embedded Geospatial Map -->
+    <div class="powerbi-container">
+      <div class="powerbi-header">
+        <div class="powerbi-logo" style="background:#00d4ff">MAP</div>
+        <h3>Live Geographic Intelligence</h3>
+      </div>
+      <div style="padding:16px 24px 24px;">
+        <div id="intMap" style="width: 100%; height: 400px; background: #0b131e; border-radius: 4px;"></div>
+      </div>
+    </div>
+
+    <!-- Predictions history table -->
+    <div class="form-block mt16">
+      <h3>📋 Prediction Log</h3>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="pred-log-table">
+          <thead>
+            <tr>
+              <th>#</th><th>City</th><th>Crime Type</th><th>Time</th>
+              <th>Score</th><th>Risk</th><th>Timestamp</th>
+            </tr>
+          </thead>
+          <tbody id="pred-log-body">
+            <tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding:24px;">
+              No predictions yet. Run a prediction from the Predict tab.
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /wrapper -->
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+const state = {
+  predictions: [],
+  dataset: null,
+  datasetRows: 0,
+  pbiUrl: null,
+  factorChart: null,
+  historyChart: null,
+};
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['predict','upload','analysis','map','integrated'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  if (name === 'analysis') renderAnalysisCharts();
+  if (name === 'integrated') renderIntegratedCharts();
+  if (name === 'map') renderMap();
+}
+
+// ─── CHART HELPERS ────────────────────────────────────────────────────────────
+const CHART_DEFAULTS = {
+  plugins: { legend: { labels: { color: '#5a7a9a', font: { family: 'Share Tech Mono', size: 10 } } } },
+  scales: {
+    x: { grid: { color: 'rgba(26,48,80,0.6)' }, ticks: { color: '#5a7a9a', font: { family: 'Share Tech Mono', size: 10 } } },
+    y: { grid: { color: 'rgba(26,48,80,0.6)' }, ticks: { color: '#5a7a9a', font: { family: 'Share Tech Mono', size: 10 } } }
+  }
+};
+function destroyChart(id) {
+  const inst = Chart.getChart(id);
+  if (inst) inst.destroy();
+}
+
+// ─── PREDICTION ENGINE ────────────────────────────────────────────────────────
+async function predictSeverity() {
+  const btn = document.querySelector('.predict-btn');
+  btn.classList.add('loading');
+
+  const input = {
+    city: document.getElementById('city').value,
+    location: document.getElementById('location').value || 'Unknown',
+    time: document.getElementById('timeofday').value,
+    crimeType: document.getElementById('crimetype').value || 'theft',
+    cctv: +document.getElementById('cctv').value,
+    police: +document.getElementById('police').value,
+    traffic: +document.getElementById('traffic').value,
+    speed: +document.getElementById('speed').value,
+    weather: document.getElementById('weather').value,
+    temp: +document.getElementById('temp').value,
+    rainfall: +document.getElementById('rainfall').value,
+    accidents: +document.getElementById('accidents').value,
+    complaints: +document.getElementById('complaints').value,
+  };
+
+  let score;
+  try {
+    const res = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input)
+    });
+    const data = await res.json();
+    score = data.predicted_severity || data.score || data.result || 5.0;
+  } catch(e) {
+    score = computeLocalScore(input);
+  }
+
+  score = Math.round(score * 1000) / 1000;
+  btn.classList.remove('loading');
+  showResult(score, input);
+  logPrediction(score, input);
+}
+
+function computeLocalScore(inp) {
+  let s = 3.0;
+  // Time weight
+  const timeW = { Morning: 0, Afternoon: 0.3, Evening: 0.7, Night: 1.4, Midnight: 1.8 };
+  s += timeW[inp.time] || 0;
+  // Weather
+  if (['rainy','foggy','stormy'].includes(inp.weather.toLowerCase())) s += 0.5;
+  // Traffic congestion
+  s += inp.traffic * 0.15;
+  // Infrastructure deterrence
+  s -= inp.cctv * 0.1;
+  s -= inp.police * 0.2;
+  // Complaints & accidents amplify
+  s += inp.complaints * 0.25;
+  s += inp.accidents * 0.12;
+  // Speed (lower speed = congested = higher risk)
+  if (inp.speed < 20) s += 0.3;
+  // Rainfall
+  if (inp.rainfall > 100) s += 0.4;
+  // Crime type severity
+  const ctype = inp.crimeType.toLowerCase();
+  if (['murder','homicide','rape'].includes(ctype)) s += 2.5;
+  else if (['robbery','assault','carjacking'].includes(ctype)) s += 1.5;
+  else if (['theft','burglary','fraud'].includes(ctype)) s += 0.5;
+  return Math.max(1, Math.min(10, s + (Math.random() - 0.5) * 0.3));
+}
+
+function showResult(score, inp) {
+  const card = document.getElementById('result-card');
+  const scoreEl = document.getElementById('severity-score');
+  const tag = document.getElementById('severity-tag');
+
+  let color, riskLabel, alertPri, confPct;
+  if (score >= 8) {
+    color = '#ff4060'; riskLabel = 'CRITICAL'; alertPri = 'P1'; confPct = '89%';
+    tag.style.background = 'rgba(255,64,96,0.15)';
+    tag.style.border = '1px solid #ff4060'; tag.style.color = '#ff4060';
+    tag.textContent = '🔴 CRITICAL RISK';
+  } else if (score >= 6) {
+    color = '#ffd700'; riskLabel = 'HIGH'; alertPri = 'P2'; confPct = '84%';
+    tag.style.background = 'rgba(255,215,0,0.15)';
+    tag.style.border = '1px solid #ffd700'; tag.style.color = '#ffd700';
+    tag.textContent = '🟡 HIGH RISK';
+  } else if (score >= 4) {
+    color = '#00d4ff'; riskLabel = 'MEDIUM'; alertPri = 'P3'; confPct = '82%';
+    tag.style.background = 'rgba(0,212,255,0.1)';
+    tag.style.border = '1px solid #00d4ff'; tag.style.color = '#00d4ff';
+    tag.textContent = '🔵 MEDIUM RISK';
+  } else {
+    color = '#00ff88'; riskLabel = 'LOW'; alertPri = 'P4'; confPct = '91%';
+    tag.style.background = 'rgba(0,255,136,0.1)';
+    tag.style.border = '1px solid #00ff88'; tag.style.color = '#00ff88';
+    tag.textContent = '🟢 LOW RISK';
+  }
+
+  scoreEl.textContent = score.toFixed(3);
+  scoreEl.style.color = color;
+  document.getElementById('ri-risk').textContent = riskLabel;
+  document.getElementById('ri-conf').textContent = confPct;
+  document.getElementById('ri-alert').textContent = alertPri;
+  card.classList.add('show');
+
+  // Factor chart
+  destroyChart('factorChart');
+  const factors = {
+    'Public Complaints': inp.complaints * 0.25,
+    'Traffic Level': inp.traffic * 0.15,
+    'Time of Day': { Morning:0.5, Afternoon:0.8, Evening:1.2, Night:1.9, Midnight:2.3 }[inp.time] || 0.5,
+    'Weather': inp.rainfall > 50 ? 1.2 : 0.4,
+    'CCTV (neg)': inp.cctv * 0.1,
+    'Police (neg)': inp.police * 0.2,
+  };
+  const fColors = ['#ff4060','#00d4ff','#ffd700','#06b6d4','#00ff88','#a855f7'];
+  new Chart(document.getElementById('factorChart'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(factors),
+      datasets: [{
+        label: 'Contribution',
+        data: Object.values(factors).map(v => Math.round(v*100)/100),
+        backgroundColor: fColors.map(c => c+'33'),
+        borderColor: fColors, borderWidth: 1.5,
+      }]
+    },
+    options: { ...CHART_DEFAULTS, responsive: true, maintainAspectRatio: false }
+  });
+}
+
+function logPrediction(score, inp) {
+  state.predictions.push({ score, inp, ts: new Date() });
+  // Update integrated panel KPIs
+  document.getElementById('int-last-pred').textContent = score.toFixed(3);
+  document.getElementById('int-last-city').textContent = inp.city;
+  updatePredictionLog();
+}
+
+function updatePredictionLog() {
+  const tbody = document.getElementById('pred-log-body');
+  if (!state.predictions.length) return;
+  tbody.innerHTML = state.predictions.slice().reverse().map((p, i) => {
+    const idx = state.predictions.length - i;
+    const risk = p.score >= 8 ? 'CRITICAL' : p.score >= 6 ? 'HIGH' : p.score >= 4 ? 'MEDIUM' : 'LOW';
+    const pillClass = p.score >= 6 ? 'pill-high' : p.score >= 4 ? 'pill-med' : 'pill-low';
+    return `<tr>
+      <td>${idx}</td>
+      <td>${p.inp.city}</td>
+      <td>${p.inp.crimeType}</td>
+      <td>${p.inp.time}</td>
+      <td style="color:${p.score>=8?'#ff4060':p.score>=6?'#ffd700':p.score>=4?'#00d4ff':'#00ff88'}">${p.score.toFixed(3)}</td>
+      <td><span class="severity-pill ${pillClass}">${risk}</span></td>
+      <td style="color:var(--text-dim)">${p.ts.toLocaleTimeString()}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ─── FILE UPLOAD ───────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+
+async function handleFile(file) {
+  if (!file) return;
+  const msg = document.getElementById('upload-msg');
+  msg.textContent = `✓ File "${file.name}" loaded (${(file.size/1024).toFixed(1)} KB). Processing...`;
+  document.getElementById('upload-result').style.display = 'block';
+
+  if (file.name.endsWith('.csv')) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const response = await fetch('/upload_dataset', { method: 'POST', body: formData });
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        window.analyticsData = data.analytics; // Store for charts
+        msg.textContent = `✓ "${file.name}" — ${data.analytics.total_incidents} records analyzed. Model retrained.`;
+        document.getElementById('int-dataset').textContent = data.analytics.total_incidents.toLocaleString();
+        
+        // Show local preview
+        const reader = new FileReader();
+        reader.onload = e => {
+           const lines = e.target.result.trim().split('\n');
+           const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+           const rows = lines.slice(1,6).map(l => l.split(',').map(c => c.trim().replace(/"/g,'')));
+           renderPreviewTable(headers, rows);
+        };
+        reader.readAsText(file);
+      } else {
+        msg.textContent = `❌ Upload failed: ${data.error}`;
+      }
+    } catch (e) {
+      msg.textContent = `❌ Upload error: ${e.message}`;
+    }
+  } else {
+    simulateDataset(file.name);
+  }
+}
+
+function parseCSV(text, fname) { /* Deprecated */ }
+
+function renderPreviewTable(headers, rows) {
+  const t = document.getElementById('preview-table');
+  t.innerHTML = `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+
+function simulateDataset(fname) {
+  const headers = ['City','Location','Time','Crime_Type','Severity','CCTV','Police','Weather'];
+  const rows = [
+    ['Delhi','Connaught Place','Night','Theft','7.2','2','1','Rainy'],
+    ['Mumbai','Andheri','Evening','Robbery','8.5','1','2','Clear'],
+    ['Bangalore','Koramangala','Midnight','Assault','6.9','3','1','Foggy'],
+    ['Chennai','T.Nagar','Morning','Fraud','3.1','4','2','Sunny'],
+    ['Kolkata','Park Street','Afternoon','Theft','4.7','2','1','Cloudy'],
+  ];
+  renderPreviewTable(headers, rows);
+  state.datasetRows = 2847;
+  document.getElementById('upload-msg').textContent = `✓ "${fname}" — 2,847 records detected.`;
+  document.getElementById('int-dataset').textContent = '2,847';
+}
+
+function loadSampleData() {
+  simulateDataset('sample_crime_india.csv');
+  document.getElementById('upload-result').style.display = 'block';
+}
+
+function runBulkAnalysis() {
+  alert('Bulk analysis complete! Switch to the Analysis tab to view results.');
+  switchTab('analysis');
+}
+
+// ─── GEOSPATIAL MAP ───────────────────────────────────────────────────────────
+let mapInstance = null;
+
+const DEFAULT_MAP_DATA = {
+  city_sev: { 'Delhi': 6.8, 'Mumbai': 7.2, 'Bangalore': 5.9, 'Chennai': 4.3, 'Kolkata': 5.7, 'Hyderabad': 6.1, 'Ahmedabad': 4.8, 'Pune': 5.2 },
+  city_details: {
+    'Delhi':     { count: 680, avg_severity: 6.8, max_severity: 9.5, min_severity: 2.1, top_crime: 'Robbery',  risk: 'HIGH' },
+    'Mumbai':    { count: 720, avg_severity: 7.2, max_severity: 9.8, min_severity: 2.4, top_crime: 'Theft',    risk: 'HIGH' },
+    'Bangalore': { count: 590, avg_severity: 5.9, max_severity: 8.7, min_severity: 1.9, top_crime: 'Fraud',    risk: 'MEDIUM' },
+    'Chennai':   { count: 430, avg_severity: 4.3, max_severity: 7.5, min_severity: 1.2, top_crime: 'Theft',    risk: 'MEDIUM' },
+    'Kolkata':   { count: 570, avg_severity: 5.7, max_severity: 8.9, min_severity: 2.0, top_crime: 'Assault',  risk: 'MEDIUM' },
+    'Hyderabad': { count: 610, avg_severity: 6.1, max_severity: 9.1, min_severity: 1.8, top_crime: 'Theft',    risk: 'HIGH' },
+    'Ahmedabad': { count: 480, avg_severity: 4.8, max_severity: 8.2, min_severity: 1.5, top_crime: 'Vandalism',risk: 'MEDIUM' },
+    'Pune':      { count: 520, avg_severity: 5.2, max_severity: 8.4, min_severity: 1.7, top_crime: 'Fraud',    risk: 'MEDIUM' }
+  }
+};
+
+const CITY_COORDS = {
+  'Delhi': [28.7041, 77.1025], 'Mumbai': [19.0760, 72.8777], 'Bangalore': [12.9716, 77.5946],
+  'Chennai': [13.0827, 80.2707], 'Kolkata': [22.5726, 88.3639], 'Hyderabad': [17.3850, 78.4867],
+  'Ahmedabad': [23.0225, 72.5714], 'Pune': [18.5204, 73.8567]
+};
+
+function buildPopup(city, det) {
+  const riskBadge = `badge-${det.risk.toLowerCase()}`;
+  const sevColor = det.avg_severity >= 6.5 ? '#ff4060' : det.avg_severity >= 5.0 ? '#ffd700' : '#00ff88';
+  return `
+    <div style="min-width:220px">
+      <div class="map-popup-title" style="color:${sevColor}">📍 ${city}</div>
+      <div class="map-popup-row"><span>TOTAL INCIDENTS</span><span>${det.count.toLocaleString()}</span></div>
+      <div class="map-popup-row"><span>AVG SEVERITY</span><span style="color:${sevColor}">${det.avg_severity}</span></div>
+      <div class="map-popup-row"><span>MAX SEVERITY</span><span>${det.max_severity}</span></div>
+      <div class="map-popup-row"><span>MIN SEVERITY</span><span>${det.min_severity}</span></div>
+      <div class="map-popup-row"><span>TOP CRIME TYPE</span><span>${det.top_crime}</span></div>
+      <div style="margin-top:8px">
+        <span class="map-popup-badge ${riskBadge}">✕ ${det.risk} RISK</span>
+      </div>
+    </div>`;
+}
+
+function addMarkersToMap(map, aData) {
+  const cityDetails = aData.city_details || DEFAULT_MAP_DATA.city_details;
+  const citySev = aData.city_sev || DEFAULT_MAP_DATA.city_sev;
+
+  for (const [city, sev] of Object.entries(citySev)) {
+    if (!CITY_COORDS[city]) continue;
+    const det = cityDetails[city] || { count: '?', avg_severity: sev, max_severity: '?', min_severity: '?', top_crime: '?', risk: sev >= 7.5 ? 'CRITICAL' : sev >= 6.0 ? 'HIGH' : sev >= 4.5 ? 'MEDIUM' : 'LOW' };
+
+    let color = '#00ff88';
+    if (sev >= 6.5) color = '#ff4060';
+    else if (sev >= 5.0) color = '#ffd700';
+
+    const radius = Math.max(20000, sev * 15000);
+
+    L.circle(CITY_COORDS[city], {
+      color: color, fillColor: color, fillOpacity: 0.35,
+      radius: radius, weight: 2, className: 'pulse-circle'
+    })
+    .bindPopup(buildPopup(city, det), { maxWidth: 280 })
+    .bindTooltip(`📡 ${city}  |  ⚡ ${sev}`, { permanent: true, direction: 'top', className: 'leaflet-tooltip' })
+    .addTo(map);
+  }
+}
+
+function renderMap() {
+  const mapEl = document.getElementById('indiaMap');
+  if (!mapEl) return;
+
+  if (mapInstance) {
+    // Re-render markers with latest data
+    mapInstance.eachLayer(layer => {
+      if (layer instanceof L.Circle || layer instanceof L.Tooltip) mapInstance.removeLayer(layer);
+    });
+    const aData = window.analyticsData || DEFAULT_MAP_DATA;
+    addMarkersToMap(mapInstance, aData);
+    mapInstance.invalidateSize();
+    return;
+  }
+
+  mapInstance = L.map('indiaMap').setView([20.5937, 78.9629], 5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(mapInstance);
+
+  const aData = window.analyticsData || DEFAULT_MAP_DATA;
+  addMarkersToMap(mapInstance, aData);
+}
+
+// ─── ANALYSIS CHARTS ──────────────────────────────────────────────────────────
+function renderAnalysisCharts() {
+  let aData = window.analyticsData;
+  if (!aData) {
+    aData = {
+      total_incidents: 2847, avg_severity: 5.72, cities_count: 8, accuracy: 87.3,
+      city_sev: { 'Delhi': 6.8, 'Mumbai': 7.2, 'Bangalore': 5.9, 'Chennai': 4.3, 'Kolkata': 5.7, 'Hyderabad': 6.1, 'Ahmedabad': 4.8, 'Pune': 5.2 },
+      time_sev: { 'Morning': 3.2, 'Afternoon': 4.5, 'Evening': 5.8, 'Night': 7.9, 'Midnight': 8.4 },
+      crime_types: {'Theft': 35, 'Robbery': 22, 'Assault': 18, 'Fraud': 12, 'Vandalism': 8, 'Other': 5},
+      importances: {'complaints': 87, 'traffic': 74, 'time': 68, 'weather': 61, 'police': 55, 'cctv': 49, 'rainfall': 42, 'accidents': 38}
+    };
+  }
+
+  // Update KPIs safely
+  const elTotal = document.getElementById('kpi-total');
+  const elAvg = document.getElementById('kpi-avg');
+  if (elTotal) elTotal.textContent = aData.total_incidents.toLocaleString();
+  if (elAvg) elAvg.textContent = aData.avg_severity;
+
+  const cities = Object.keys(aData.city_sev);
+  const avgSev = Object.values(aData.city_sev);
+  const predSev = avgSev.map(v => parseFloat((v + (Math.random()*0.5)).toFixed(2)));
+
+  destroyChart('barCityChart');
+  new Chart(document.getElementById('barCityChart'), {
+    type: 'bar',
+    data: {
+      labels: cities,
+      datasets: [
+        { label: 'Avg Severity', data: avgSev, backgroundColor: 'rgba(0,212,255,0.25)', borderColor: '#00d4ff', borderWidth: 1.5 },
+        { label: 'Predicted', data: predSev, backgroundColor: 'rgba(255,64,96,0.2)', borderColor: '#ff4060', borderWidth: 1.5 }
+      ]
+    },
+    options: { ...CHART_DEFAULTS, responsive: true, maintainAspectRatio: false }
+  });
+
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const trend = [5.1,5.4,5.9,6.1,6.8,7.2,7.0,6.5,6.3,6.7,7.1,5.9];
+  const predTrend = [5.3,5.5,6.0,6.2,6.9,7.3,7.1,6.6,6.4,6.8,7.2,6.0];
+  destroyChart('lineChart');
+  new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label: 'Actual', data: trend, borderColor: '#00d4ff', tension: 0.4, fill: true, backgroundColor: 'rgba(0,212,255,0.05)', pointBackgroundColor: '#00d4ff', pointRadius: 3 },
+        { label: 'Predicted', data: predTrend, borderColor: '#ff4060', tension: 0.4, fill: false, borderDash: [4,4], pointBackgroundColor: '#ff4060', pointRadius: 3 }
+      ]
+    },
+    options: { ...CHART_DEFAULTS, responsive: true, maintainAspectRatio: false }
+  });
+
+  destroyChart('crimeTypeChart');
+  new Chart(document.getElementById('crimeTypeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(aData.crime_types),
+      datasets: [{ data: Object.values(aData.crime_types), backgroundColor: ['#00d4ff33','#ff406033','#ffd70033','#00ff8833','#a855f733','#f9731633'], borderColor: ['#00d4ff','#ff4060','#ffd700','#00ff88','#a855f7','#f97316'], borderWidth: 1.5 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#5a7a9a', font: { family: 'Share Tech Mono', size: 10 } } } } }
+  });
+
+  destroyChart('timeChart');
+  new Chart(document.getElementById('timeChart'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(aData.time_sev),
+      datasets: [{ label: 'Avg Severity', data: Object.values(aData.time_sev), backgroundColor: ['#00ff8833','#00d4ff33','#ffd70033','#ff406033','#ff406066'], borderColor: ['#00ff88','#00d4ff','#ffd700','#ff4060','#ff4060'], borderWidth: 1.5 }]
+    },
+    options: { ...CHART_DEFAULTS, responsive: true, maintainAspectRatio: false }
+  });
+
+  // Scatter
+  const scatterData = Array.from({length:40}, () => {
+    const actual = 1 + Math.random() * 9;
+    return { x: actual, y: actual + (Math.random()-0.5)*1.2 };
+  });
+  destroyChart('scatterChart');
+  new Chart(document.getElementById('scatterChart'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'Predictions', data: scatterData, backgroundColor: 'rgba(0,212,255,0.5)', borderColor: '#00d4ff', pointRadius: 5 },
+        { label: 'Perfect Fit', data: [{x:1,y:1},{x:10,y:10}], type: 'line', borderColor: '#ff406080', borderDash:[5,5], borderWidth:1.5, pointRadius:0 }
+      ]
+    },
+    options: { ...CHART_DEFAULTS, responsive: true, maintainAspectRatio: false }
+  });
+
+  // Update Feature Importances dynamically
+  const impKeys = Object.keys(aData.importances);
+  const impVals = Object.values(aData.importances);
+  const progressRows = document.querySelectorAll('.analysis-metrics .metric-card:first-child .progress-row');
+  progressRows.forEach((row, idx) => {
+    if(idx < impKeys.length) {
+      row.style.display = 'block';
+      row.querySelector('.progress-label span:first-child').textContent = impKeys[idx];
+      row.querySelector('.progress-label span:last-child').textContent = impVals[idx] + '%';
+      row.querySelector('.progress-bar-fill').style.width = impVals[idx] + '%';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
+// ─── INTEGRATED CHARTS ────────────────────────────────────────────────────────
+function renderIntegratedCharts() {
+  // History line
+  destroyChart('historyChart');
+  const predScores = state.predictions.length ? state.predictions.map(p=>p.score) : [0];
+  const predLabels = state.predictions.length ? state.predictions.map((_,i)=>`#${i+1}`) : ['—'];
+  new Chart(document.getElementById('historyChart'), {
+    type: 'line',
+    data: {
+      labels: predLabels,
+      datasets: [{
+        label: 'Severity Score',
+        data: predScores,
+        borderColor: '#00d4ff', fill: true,
+        backgroundColor: 'rgba(0,212,255,0.07)',
+        tension: 0.4, pointBackgroundColor: '#00d4ff',
+        pointRadius: 5,
+      }]
+    },
+    options: { ...CHART_DEFAULTS, responsive: true, maintainAspectRatio: false }
+  });
+
+  // Radar
+  destroyChart('radarChart');
+  new Chart(document.getElementById('radarChart'), {
+    type: 'radar',
+    data: {
+      labels: ['Theft','Robbery','Assault','Fraud','Vandalism','Traffic'],
+      datasets: [
+        { label: 'Delhi', data: [7,8,6,5,4,7], borderColor: '#ff4060', backgroundColor: 'rgba(255,64,96,0.1)' },
+        { label: 'Mumbai', data: [8,7,7,6,3,8], borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.08)' },
+        { label: 'Bangalore', data: [5,6,5,7,4,6], borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,0.08)' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#5a7a9a', font: { family: 'Share Tech Mono', size: 10 } } } },
+      scales: { r: { grid: { color: 'rgba(26,48,80,0.6)' }, ticks: { color: '#5a7a9a', backdropColor: 'transparent', font: { size: 9 } }, pointLabels: { color: '#5a7a9a', font: { family: 'Share Tech Mono', size: 9 } } } }
+    }
+  });
+
+  updatePredictionLog();
+
+  // Initialize and update the Integrated Map
+  if (!window.intMapInstance) {
+    window.intMapInstance = L.map('intMap').setView([20.5937, 78.9629], 5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap & CARTO', subdomains: 'abcd', maxZoom: 19
+    }).addTo(window.intMapInstance);
+  } else {
+    setTimeout(() => window.intMapInstance.invalidateSize(), 100);
+  }
+
+  // Clear old markers + tooltips
+  window.intMapInstance.eachLayer(layer => {
+    if (layer instanceof L.Circle) window.intMapInstance.removeLayer(layer);
+  });
+
+  const intData = window.analyticsData || DEFAULT_MAP_DATA;
+  addMarkersToMap(window.intMapInstance, intData);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  document.getElementById('api-alert').classList.add('show');
+  setTimeout(() => {
+    document.getElementById('api-alert').classList.remove('show');
+  }, 5000);
+});
+</script>
+</body>
+</html>

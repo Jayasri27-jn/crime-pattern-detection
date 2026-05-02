@@ -1,0 +1,3 @@
+City,Location,Time of Day,Crime Type,Nearby CCTV Cameras,Police Stations Nearby,Traffic Congestion Level,Traffic Avg Speed (KMH),Weather Condition,Temperature (C),Rainfall (mm),Road Accidents Reported,Public Complaints,Predicted Crime Severity,timestamp
+Delhi,,Morning,theft,0,0,0,0,sunny,0,0,0,0,0,2026-04-20 15:16:52.742764
+Delhi,,Morning,theft,0,0,0,0,sunny,0,0,0,0,4.403,2026-04-20 15:17:34.728427

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Login - Crime Severity Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #080c14;
+    --surface: #0d1520;
+    --border: #1a3050;
+    --accent: #00d4ff;
+    --accent2: #ff4060;
+    --text: #c8dff0;
+    --text-dim: #5a7a9a;
+    --glow: 0 0 20px rgba(0,212,255,0.3);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+  /* Grid bg */
+  body::after {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background-image: linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .login-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 40px;
+    width: 100%;
+    max-width: 420px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .login-container::before {
+    content: ''; position: absolute; top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: linear-gradient(180deg, var(--accent), transparent);
+    border-radius: 4px 0 0 4px;
+  }
+
+  .header-icon { 
+    font-size: 3rem; 
+    filter: drop-shadow(0 0 10px var(--accent)); 
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.8rem; font-weight: 700; letter-spacing: 3px;
+    color: #fff;
+    text-transform: uppercase;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  p.subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem; color: var(--accent); letter-spacing: 2px;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .field-group { display: grid; gap: 20px; margin-bottom: 32px; }
+  .field label {
+    display: block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem; color: var(--text-dim);
+    letter-spacing: 2px; margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .field input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0,212,255,0.15);
+  }
+
+  .login-btn {
+    width: 100%;
+    padding: 16px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 1.2rem; font-weight: 700;
+    letter-spacing: 4px; text-transform: uppercase;
+    cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: all 0.3s;
+    border-radius: 3px;
+  }
+  .login-btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--accent); opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .login-btn:hover { color: var(--bg); box-shadow: var(--glow); }
+  .login-btn:hover::before { opacity: 1; }
+  .login-btn span { position: relative; z-index: 1; }
+
+  .error-msg {
+    color: var(--accent2);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    text-align: center;
+    margin-bottom: 16px;
+    background: rgba(255,64,96,0.1);
+    padding: 8px;
+    border: 1px solid var(--accent2);
+    border-radius: 3px;
+    display: none;
+  }
+  {% if error %}
+  .error-msg { display: block; }
+  {% endif %}
+
+  .demo-creds {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: 24px;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="login-container">
+    <div class="header-icon">🚔</div>
+    <h1>System Login</h1>
+    <p class="subtitle">// CRIME SEVERITY PLATFORM //</p>
+
+    <div class="error-msg">⚠ Invalid credentials. Access denied.</div>
+
+    <form method="POST" action="/login">
+      <div class="field-group">
+        <div class="field">
+          <label>Operator ID</label>
+          <input type="text" name="username" placeholder="Enter ID" required autocomplete="off" />
+        </div>
+        <div class="field">
+          <label>Passcode</label>
+          <input type="password" name="password" placeholder="••••••••" required />
+        </div>
+      </div>
+      
+      <button type="submit" class="login-btn">
+        <span>Authenticate</span>
+      </button>
+    </form>
+
+    <div class="demo-creds">
+      Demo Access: admin / password
+    </div>
+  </div>
+
+</body>
+</html>

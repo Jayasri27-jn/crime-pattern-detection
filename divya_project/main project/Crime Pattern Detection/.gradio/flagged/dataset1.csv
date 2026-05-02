@@ -1,0 +1,2 @@
+City,Location,Time of Day,Crime Type,CCTV Count,Police Stations Nearby,output,timestamp
+Mumbai,Colaba,Morning,Theft,2,3,Predicted Severity Level: 1,2026-03-28 12:22:42.485459
